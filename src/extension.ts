@@ -3,6 +3,8 @@
 import * as vscode from 'vscode';
 import { CodeLensProvider } from './codeLensProvider';
 import { search, NmStore } from './nmStore';
+import { CurrentFileNmDataProvider } from './currentFileNmDataProvider';
+import { GlobalNmDataProvider } from './globalNmDataProvider';
 
 
 // this method is called when your extension is activated
@@ -24,6 +26,8 @@ export function activate(context: vscode.ExtensionContext) {
 	const codeLensProvider = new CodeLensProvider(nmStore)
 	vscode.languages.registerCodeLensProvider({ language: 'cpp' }, codeLensProvider)
 	vscode.languages.registerCodeLensProvider({ language: 'c' }, codeLensProvider)
+	vscode.window.registerTreeDataProvider('nm-tool.globalNm', new GlobalNmDataProvider(nmStore))
+	vscode.window.registerTreeDataProvider('nm-tool.currentFileNm', new CurrentFileNmDataProvider(nmStore))
 	
 	context.subscriptions.push(vscode.commands.registerCommand('nm-tool.updateNmStore', () => {
 		nmStore.update()

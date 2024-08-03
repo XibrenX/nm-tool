@@ -2,7 +2,7 @@
 	"name": "nm-tool",
 	"displayName": "Nm tool",
 	"description": "Show Nm tool result in VSCode",
-	"version": "0.0.1",
+	"version": "0.0.2",
 	"publisher": "wibren-wiersma",
 	"repository": "https://github.com/XibrenX/nm-tool",
 	"engines": {
@@ -28,12 +28,40 @@
 			}
 		],
 		"viewsContainers": {
+			"activitybar": [
+				{
+					"id": "nm-tool",
+					"title": "Nm tool",
+					"icon": "$(symbol-structure)"
+				}
+			]
 		},
 		"views": {
+			"nm-tool": [
+				{
+					"id": "nm-tool.globalNm",
+					"name": "Global nm data"
+				},
+				{
+					"id": "nm-tool.currentFileNm",
+					"name": "Current file nm data"
+				}
+			]
 		},
 		"viewsWelcome": [
+			{
+				"view": "nm-tool.globalNm",
+				"contents": "No **/*.elf file found. Make sure a *.elf file can be found."
+			}
 		],
 		"menus": {
+			"view/title": [
+				{
+					"command": "nm-tool.updateNmStore",
+					"when": "view == nm-tool.globalNm",
+					"group": "navigation"
+				}
+			]
 		}
 	},
 	"scripts": {
