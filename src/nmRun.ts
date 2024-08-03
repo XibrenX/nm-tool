@@ -1,8 +1,6 @@
 import * as vscode from 'vscode';
-import * as util from 'util'
 import * as child_process from 'child_process';
 import { NmLine } from './nmLine';
-const exec = util.promisify(child_process.exec);
 
 export class NmRun {
     private readonly _lines: NmLine[] = []
@@ -19,15 +17,60 @@ export class NmRun {
         this.lines.length = 0
         const command = `nm -lSC ${this.file.fsPath}`
         console.log('nm-tool: Will run ' + command)
-        const promise = exec(command, { maxBuffer: 10 * 1024 * 1024 })
-        const cp = promise.child
-        const { stdout, stderr } = await promise
-        if (cp.exitCode != 0) {
-            console.error(`nm-tool: Command ${command} exited with ${cp.exitCode}.\nOutput: ${stderr}`)
-            return
-        }
 
-        this._lines.push(...stdout.split('\n').map((line) => line.trim()).filter((line) => line.length > 0).map((line) => new NmLine(line, this)))
+        let stderr = ''
+        try
+        {
+            const exitCode = await new Promise((resolve, reject) => {
+                const process = child_process.spawn('nm', ['-lSC', this.file.fsPath])
+
+                let stdout = ''
+                const processStdOut = () => {
+                    let lines = stdout.split('\n')
+                    stdout = lines.pop() ?? ''
+                    this._lines.push(...lines.filter((line) => line.length > 0).map((line) => new NmLine(line, this)))
+                }
+
+                process.stdout.on('data', (data) => {
+                    if (data)
+                    {
+                        stdout += data
+                        processStdOut()
+                    }
+                })
+
+                process.stderr.on('data', (data) => {
+                    if (data)
+                    {
+                        stderr += data
+                    }
+                })
+
+                process.on('close', (code) => {
+                    stdout = stdout.trim()
+                    if (stdout != '')
+                    {
+                        this._lines.push(new NmLine(stdout, this))
+                    }
+
+                    resolve(code);
+                });
+                process.on('error', (err) => {
+                    reject(err);
+                });
+            })
+        
+            if (exitCode != 0) {
+                vscode.window.showErrorMessage(`Nm-tool: Command '${command}' exited with ${exitCode}. Output: ${stderr}`)
+            } else {
+                console.log(`Nm-tool: Created ${this._lines.length} lines for ${this.file.fsPath}`)
+            }
+        }
+        catch(error)
+        {
+            console.dir(error)
+            vscode.window.showErrorMessage(`Nm-tool: Could not run command '${command}'. Error: ${error}`)
+        }
     }
 
     onDelete() {

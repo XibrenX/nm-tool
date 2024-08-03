@@ -10,7 +10,6 @@ export class NmLine {
     public readonly line?: number
 
     constructor(line: string, public readonly run: NmRun) {
-        console.log('Nm-tool: Constructing line: ' + line)
         const lineParts = line.split(' ')
         var linePartsIndex = 0
 

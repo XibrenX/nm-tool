@@ -32,12 +32,12 @@ export class NmStore
 
                     await suFile.update()
                 }))
-                console.log(`Found ${this._nmRuns.size} files matching ${search}`)
+                console.log(`Nm-tool: Found ${this._nmRuns.size} files matching ${search}`)
 
                 progress.report({ increment: 100 });
 
                 if (this._nmRuns.size == 0) {
-                    vscode.window.showWarningMessage(`No files found matching ${search}`)
+                    vscode.window.showWarningMessage(`Nm-tool: No files found matching ${search}`)
                 }
             })
         })
@@ -45,7 +45,7 @@ export class NmStore
 
     onAddOrUpdate(uri: vscode.Uri) {
         this._asyncOperationsStore.addOperation(async () => {
-            console.log(`On add or update ${uri.fsPath}`)
+            console.log(`Nm-tool: On add or update ${uri.fsPath}`)
             let suFile = this._nmRuns.get(uri.fsPath) ?? new NmRun(uri)
             this._nmRuns.set(uri.fsPath, suFile)
             await suFile.update()
@@ -54,7 +54,7 @@ export class NmStore
 
     onDelete(uri: vscode.Uri) {
         this._asyncOperationsStore.addOperation(async () => {
-            console.log(`On delete ${uri.fsPath}`)
+            console.log(`Nm-tool: On delete ${uri.fsPath}`)
             let suFile = this._nmRuns.get(uri.fsPath)
             if (suFile) {
                 suFile.onDelete()

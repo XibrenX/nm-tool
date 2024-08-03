@@ -32,7 +32,7 @@ export class CodeLensProvider implements vscode.CodeLensProvider
             codeLenses.push(new vscode.CodeLens(range, { title: this.getTitle(line), tooltip: this.getTooltip(line), command: ''}))
         }
 
-        console.log(`Created ${codeLenses.length} for ${lines.length} lines for ${document.fileName}`)
+        console.log(`Nm-tool: Created ${codeLenses.length} for ${lines.length} lines for ${document.fileName}`)
 
         return codeLenses
     }
