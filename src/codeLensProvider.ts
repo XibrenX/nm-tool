@@ -15,11 +15,11 @@ export class CodeLensProvider implements vscode.CodeLensProvider
     }
 
     private getTooltip(line: NmLine): string{
-        return `${line.name} at ${line.run.file.fsPath}:${line.inputPosition.toString(16)}`
+        return `${line.name}\n\n${line.run.file.fsPath}:${line.inputPosition.toString(16)}`
     }
 
     provideCodeLenses(document: vscode.TextDocument, token: vscode.CancellationToken): vscode.ProviderResult<vscode.CodeLens[]> {
-        let lines = this.nmStore.runs.flatMap(r => r.lines).filter(l => l.matchesFileName(document.fileName))
+        let lines = this.nmStore.runs.flatMap(r => r.lines).filter(l => l.matchesFileName(document.fileName)).filter(l => l.size !== undefined)
 
         let codeLenses = []
         for (const line of lines)

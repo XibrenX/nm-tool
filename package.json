@@ -2,7 +2,7 @@
 	"name": "nm-tool",
 	"displayName": "Nm tool",
 	"description": "Show Nm tool result in VSCode",
-	"version": "0.0.2",
+	"version": "0.0.3",
 	"publisher": "wibren-wiersma",
 	"repository": "https://github.com/XibrenX/nm-tool",
 	"engines": {
