@@ -2,7 +2,7 @@
 // Import the module and reference it with the alias vscode in your code below
 import * as vscode from 'vscode';
 import { CodeLensProvider } from './codeLensProvider';
-import { search, NmStore } from './nmStore';
+import { NmStore } from './nmStore';
 import { CurrentFileNmDataProvider } from './currentFileNmDataProvider';
 import { GlobalNmDataProvider } from './globalNmDataProvider';
 
@@ -16,12 +16,6 @@ export function activate(context: vscode.ExtensionContext) {
 
 	const nmStore = new NmStore()
 	context.subscriptions.push(nmStore);
-
-	const watcher = vscode.workspace.createFileSystemWatcher(search);
-	watcher.onDidCreate(uri => nmStore.onAddOrUpdate(uri))
-	watcher.onDidChange(uri => nmStore.onAddOrUpdate(uri))
-	watcher.onDidDelete(uri => nmStore.onDelete(uri))
-	context.subscriptions.push(watcher);
 
 	const codeLensProvider = new CodeLensProvider(nmStore)
 	vscode.languages.registerCodeLensProvider({ language: 'cpp' }, codeLensProvider)

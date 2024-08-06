@@ -2,7 +2,7 @@
 	"name": "nm-tool",
 	"displayName": "Nm tool",
 	"description": "Show Nm tool result in VSCode",
-	"version": "0.0.3",
+	"version": "1.0.0",
 	"publisher": "wibren-wiersma",
 	"repository": "https://github.com/XibrenX/nm-tool",
 	"engines": {
@@ -62,7 +62,19 @@
 					"group": "navigation"
 				}
 			]
-		}
+		},
+		"configuration":[
+			{
+				"title": "Nm tool",
+				"properties": {
+					"nmTool.inputFiles": {
+						"type": "string",
+						"default": "**/*.elf",
+						"description": "The file(s) the nm tool uses to feed to the `nm` command"
+					}
+				}
+			}
+		]
 	},
 	"scripts": {
 		"vscode:prepublish": "npm run compile",
