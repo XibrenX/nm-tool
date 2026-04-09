@@ -7,7 +7,7 @@ export class CurrentFileNmRunTreeItem extends vscode.TreeItem {
     constructor(public readonly nmRun: NmRun, nmStore: NmStore)
     {
         super(nmStore.getUniquePart(nmRun), vscode.TreeItemCollapsibleState.Expanded);
-        this.tooltip = nmRun.file.fsPath;
+        this.tooltip = `${nmRun.file.fsPath}\n${nmRun.nmTool}`;
         this.resourceUri = nmRun.file;
         this.contextValue = 'nmRun';
     }

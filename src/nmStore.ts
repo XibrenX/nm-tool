@@ -17,7 +17,7 @@ export class NmStore
     public get onFilesUpdated(): vscode.Event<void> { return this._asyncOperationsStore.onAllOperationsDone; }
     public get runs(): NmRun[] { return Array.from(this._nmRuns.values()); }
 
-    constructor()
+    constructor(public readonly outputChannel: vscode.OutputChannel)
     {
         this._inputFiles = vscode.workspace.getConfiguration('nmTool').get<string>('inputFiles') ?? DEFAULT_INPUT_FILES;
 
@@ -58,10 +58,16 @@ export class NmStore
 
                 const uris = await vscode.workspace.findFiles(this._inputFiles, null);
                 await Promise.all(uris.map(async uri => {
-                    const suFile = this._nmRuns.get(uri.fsPath) ?? new NmRun(uri);
-                    this._nmRuns.set(uri.fsPath, suFile);
+                    try{
+                        const nmRun = this._nmRuns.get(uri.fsPath) ?? new NmRun(uri);
+                        this._nmRuns.set(uri.fsPath, nmRun);
 
-                    await suFile.update();
+                        await nmRun.update(this.outputChannel);
+                    } 
+                    catch (error)
+                    {
+                        console.error(`Error while processing nmRun: ${uri.fsPath}`, error);
+                    }
                 }));
 
                 progress.report({ increment: 100 });
@@ -77,7 +83,7 @@ export class NmStore
         this._asyncOperationsStore.addOperation(async () => {
             const suFile = this._nmRuns.get(uri.fsPath) ?? new NmRun(uri);
             this._nmRuns.set(uri.fsPath, suFile);
-            await suFile.update();
+            await suFile.update(this.outputChannel);
         });
     }
 
