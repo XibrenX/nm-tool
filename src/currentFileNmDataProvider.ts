@@ -54,9 +54,9 @@ export class CurrentFileNmDataProvider implements vscode.TreeDataProvider<Curren
         let nmRun: NmRun | undefined = undefined;
         if (element === undefined) {
             if (this.nmStore.runs.length == 1) {
-                nmRun = this.nmStore.runs[0];
+                nmRun = this.nmStore.runs.at(0)!;
             } else {
-                return this.nmStore.runs.filter((r) => r.lines.some(l => l.matchesFileName(filename))).map((r) => new CurrentFileNmRunTreeItem(r, this.nmStore));
+                return this.nmStore.runs.as_array().filter((r) => r.lines.as_array().some(l => l.matchesFileName(filename))).map((r) => new CurrentFileNmRunTreeItem(r, this.nmStore));
             }
         } else if (element instanceof CurrentFileNmRunTreeItem ) {
             nmRun = element.nmRun;
@@ -64,7 +64,7 @@ export class CurrentFileNmDataProvider implements vscode.TreeDataProvider<Curren
             return [];
         }
 
-        return nmRun.lines.filter(l => l.matchesFileName(filename)).sort((la, lb) => (lb.size ?? -1) - (la.size ?? -1)).map(l => new CurrentFileNmLineTreeItem(l));
+        return nmRun.lines.as_array().filter(l => l.matchesFileName(filename)).sort((la, lb) => (lb.size ?? -1) - (la.size ?? -1)).map(l => new CurrentFileNmLineTreeItem(l));
     }
 
     resolveTreeItem(item: vscode.TreeItem, element: CurrentFileNmTreeItem, token: vscode.CancellationToken): vscode.ProviderResult<vscode.TreeItem>

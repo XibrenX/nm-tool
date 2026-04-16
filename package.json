@@ -5,7 +5,15 @@
 	"version": "1.2.0",
 	"publisher": "wibren-wiersma",
 	"repository": "https://github.com/XibrenX/nm-tool",
-	"keywords": ["gcc", "gnu", "nm", "objdump", "binary", "size", "elf"],
+	"keywords": [
+		"gcc",
+		"gnu",
+		"nm",
+		"objdump",
+		"binary",
+		"size",
+		"elf"
+	],
 	"icon": "icon.png",
 	"engines": {
 		"vscode": "^1.74.0"
@@ -24,8 +32,8 @@
 	"contributes": {
 		"commands": [
 			{
-				"command": "nm-tool.updateNmStore",
-				"title": "Nm tool: Run nm",
+				"command": "nm-tool.reload",
+				"title": "Nm tool: Reload",
 				"icon": "$(refresh)"
 			},
 			{
@@ -44,40 +52,42 @@
 				{
 					"id": "nm-tool",
 					"title": "Nm tool",
-					"icon": "icon.png"
+					"icon": "$(file-binary)"
 				}
 			]
 		},
 		"views": {
 			"nm-tool": [
 				{
-					"id": "nm-tool.globalNm",
-					"name": "Global nm data"
+					"id": "nm-tool.global",
+					"name": "Global nm data",
+					"icon": "$(file-binary)"
 				},
 				{
-					"id": "nm-tool.currentFileNm",
-					"name": "Current file nm data"
+					"id": "nm-tool.currentFile",
+					"name": "Current file nm data",
+					"icon": "$(file-binary)"
 				}
 			]
 		},
 		"viewsWelcome": [
 			{
-				"view": "nm-tool.globalNm",
+				"view": "nm-tool.global",
 				"contents": "No **/*.elf file found. Make sure a *.elf file can be found."
 			}
 		],
 		"menus": {
 			"view/title": [
 				{
-					"command": "nm-tool.updateNmStore",
-					"when": "view == nm-tool.globalNm",
+					"command": "nm-tool.reload",
+					"when": "view == nm-tool.global",
 					"group": "navigation"
 				}
 			],
 			"view/item/context": [
 				{
 					"command": "nm-tool.copyPath",
-					"when": "(view == nm-tool.globalNm || view == nm-tool.currentFileNm) && viewItem == nmRun"
+					"when": "(view == nm-tool.global || view == nm-tool.currentFile) && viewItem == nmRun"
 				}
 			]
 		},
@@ -102,8 +112,8 @@
 	},
 	"devDependencies": {
 		"@types/escape-html": "^1.0.4",
-		"@types/node": "^16.18.34",
-		"@types/vscode": "^1.73.0",
+		"@types/node": "^16.18.126",
+		"@types/vscode": "^1.74.0",
 		"@typescript-eslint/eslint-plugin": "^6.7.0",
 		"@typescript-eslint/parser": "^6.7.0",
 		"eslint": "^8.26.0",

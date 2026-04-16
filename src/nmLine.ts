@@ -1,6 +1,7 @@
 import * as path from 'path';
 import { NmRun } from "./nmRun";
 import { ObjdumpLabel } from './objdumpLabel';
+import * as vscode from 'vscode';
 
 export class NmLine {
     public readonly address: number;
@@ -11,6 +12,9 @@ export class NmLine {
     public readonly line?: number;
 
     public objdumpLabel?: ObjdumpLabel;
+
+    public get addressStr() { return this.address.toString(16); }
+    public get position() { return this.line ? new vscode.Position(this.line - 1, 0) : undefined; }
 
     constructor(line: string, public readonly run: NmRun) {
         const lineParts = line.split(' ');

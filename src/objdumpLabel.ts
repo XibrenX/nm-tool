@@ -1,14 +1,15 @@
+import { KeyedSortedSet } from "./KeyedSortedSet";
 import { NmLine } from "./nmLine";
 import { ObjdumpInstruction } from "./objdumpInstruction";
 import { ObjdumpSection } from "./objdumpSection";
 
 export class ObjdumpLabel
 {
-    public instructions: ObjdumpInstruction[] = [];
+    public instructions = new KeyedSortedSet<number, ObjdumpInstruction>(i => i.address);
 
     public get addressStr() { return this.address.toString(16); }
 
-    public get lastAddress() { return this.instructions.at(this.instructions.length - 1)?.address ?? this.address; }
+    public get lastAddress() { return this.instructions.last?.address ?? this.address; }
 
     public get location() { return this.instructions.at(0)?.location; }
 

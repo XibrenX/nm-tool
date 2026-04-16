@@ -22,11 +22,16 @@ export class ObjdumpInstruction {
             // for now only use the first ref...
             const refAddress = parseInt(refMatch[1], 16);
             return this.label.section.nmRun.sections
-                .filter(s => s.contains(refAddress))
-                .flatMap(s => s.labels)
-                .filter(l => l.contains(refAddress))
-                .flatMap(l => l.instructions)
-                .find(i => i.address === refAddress);
+                .find(s => s.contains(refAddress))?.labels.as_array().find(l => l.contains(refAddress))?.instructions.get(refAddress);
+        }
+
+        const commendRef = /(?:\/\/|@)\s+([A-Fa-f0-9]+)\b/g;
+        const commendRefMatches = this.assembly.matchAll(commendRef);
+        for (const commendRef of commendRefMatches) {
+            // for now only use the first ref...
+            const refAddress = parseInt(commendRef[1], 16);
+            return this.label.section.nmRun.sections
+                .find(s => s.contains(refAddress))?.labels.as_array().find(l => l.contains(refAddress))?.instructions.get(refAddress);
         }
     }
 }

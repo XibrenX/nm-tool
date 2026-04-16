@@ -5,6 +5,7 @@ import * as fs from 'fs';
 import { ObjdumpSection } from './objdumpSection';
 import { ObjdumpLabel } from './objdumpLabel';
 import { ObjdumpInstruction } from './objdumpInstruction';
+import { KeyedSortedSet } from './KeyedSortedSet';
 
 const CMakeCacheFileName = 'CMakeCache.txt';
 
@@ -33,27 +34,27 @@ function constructRecursiveSearch(directories: string[], fileName: string, isTop
 export interface ObjdumpRef {
     from: ObjdumpInstruction
     to: ObjdumpInstruction
-};
+}
 
 export class NmRun {
-    private readonly _lines: NmLine[] = [];
-
-    public get lines(): NmLine[] {
-        return this._lines;
-    }
+    public readonly lines = new KeyedSortedSet<number, NmLine>(l => l.address);
 
     public sections: ObjdumpSection[] = [];
     public refs: ObjdumpRef[] = [];
 
     constructor(public readonly file: vscode.Uri, public lastWritten: number = 0) {
-        this._lines = [];
     }
 
     public nmTool: string = 'nm';
     public objdumpTool: string = 'objdump';
 
+    refsFromOtherLabels(callsTo: ObjdumpLabel): ObjdumpRef[]
+    {
+        return this.refs.filter(r => r.to.label === callsTo && r.from.label !== callsTo);
+    }
+
     async update(outputChannel: vscode.OutputChannel) {
-        this.lines.length = 0;
+        this.lines.clear();
         this.sections.length = 0;
         this.refs.length = 0;
         this.nmTool = 'nm';
@@ -68,25 +69,24 @@ export class NmRun {
             await this.runObjdumpTool(outputChannel);
 
             // Resolve objdump instruction references
-            this.refs.push(...this.sections.flatMap(s => s.labels).flatMap(i => i.instructions).map(i => {
-                const ref = i.tryGetRef();
-                if (ref) {
-                    return {
-                        from: i,
-                        to: ref
-                    } as ObjdumpRef;
+            for (const section of this.sections) {
+                for (const label of section.labels) {
+                    for (const instruction of label.instructions) {
+                        const ref = instruction.tryGetRef();
+                        if (ref) {
+                            this.refs.push({
+                                from: instruction,
+                                to: ref
+                            } as ObjdumpRef);
+                        }
+                    }
                 }
-                else {
-                    return undefined;
-                }
-            }).filter(i => i !== undefined));
+            }
 
             // Resolve nmLine vs objdumpLbael references
-            for(const line of this._lines)
-            {
-                const label = this.sections.filter(s => s.contains(line.address)).flatMap(s => s.labels).filter(l => l.address === line.address).at(0);
-                if (label)
-                {
+            for (const line of this.lines) {
+                const label = this.sections.filter(s => s.contains(line.address)).flatMap(s => s.labels.get(line.address)).at(0);
+                if (label) {
                     line.objdumpLabel = label;
                     label.nmLine = line;
                 }
@@ -108,8 +108,7 @@ export class NmRun {
                         outputChannel.appendLine("Found nm path: " + this.nmTool);
                         break;
                     }
-                    else
-                    {
+                    else {
                         outputChannel.appendLine("Warning found nm path does not exists: " + nmToolMatch[1]);
                     }
                 }
@@ -121,8 +120,7 @@ export class NmRun {
                         outputChannel.appendLine("Found objdump path: " + this.objdumpTool);
                         break;
                     }
-                    else
-                    {
+                    else {
                         outputChannel.appendLine("Warning found objdump path does not exists: " + objdumpToolMatch[1]);
                     }
                 }
@@ -137,21 +135,11 @@ export class NmRun {
         }
     }
 
-    private async runNmTool(outputChannel: vscode.OutputChannel): Promise<boolean> {
-        const args = ['-lSC', this.file.fsPath];
-        const command = [this.nmTool].concat(args).join(' ');
-
-        const processLine = (line: string) => {
-            if (line.length == 0)
-                return;
-
-            this._lines.push(new NmLine(line, this));
-        };
-
+    private static async run(command: string, args: string[], processStdLine: (line: string) => void, onError: (command: string, error: any, exitCode?: number, stdErr?: string) => void): Promise<boolean> {
         let stderr = '';
         try {
-            const exitCode = await new Promise((resolve, reject) => {
-                const process = child_process.spawn(this.nmTool, args);
+            const exitCode = await new Promise<number>((resolve, reject) => {
+                const process = child_process.spawn(command, args);
 
                 let stdout = '';
                 const processStdOut = () => {
@@ -159,55 +147,82 @@ export class NmRun {
                     stdout = lines.pop() ?? '';
 
                     for (const line of lines) {
-                        processLine(line);
+                        processStdLine(line);
                     }
                 };
 
-                process.stdout.on('data', (data) => {
+                process.stdout.on('data', (data: string) => {
                     if (data) {
                         stdout += data;
                         processStdOut();
                     }
                 });
 
-                process.stderr.on('data', (data) => {
+                process.stderr.on('data', (data: string) => {
                     if (data) {
                         stderr += data;
                     }
                 });
 
-                process.on('close', (code) => {
+                process.on('close', (code: number) => {
                     stdout = stdout.trim();
                     if (stdout != '') {
-                        processLine(stdout);
+                        processStdLine(stdout);
                     }
 
                     resolve(code);
                 });
-                process.on('error', (err) => {
+                process.on('error', (err: any) => {
                     reject(err);
                 });
             });
 
             if (exitCode != 0) {
-                vscode.window.showErrorMessage(`Nm-tool: Command '${command}' exited with ${exitCode}. Output: ${stderr}`);
+                onError([command, ...args].join(' '), undefined, exitCode, stderr);
                 return false;
             }
             else {
-                outputChannel.appendLine(`Command '${command}' resulted in ${this._lines.length} lines`);
                 return true;
             }
         }
         catch (error) {
-            console.error(`Nm-tool: Could not run command '${command}'`, error);
-            vscode.window.showErrorMessage(`Nm-tool: Could not run command '${command}'. Error: ${error}`);
+            onError([command, ...args].join(' '), error);
             return false;
         }
     }
 
+    private async runNmTool(outputChannel: vscode.OutputChannel): Promise<boolean> {
+        const args = ['-lSC', this.file.fsPath];
+
+        const processLine = (line: string) => {
+            if (line.length == 0)
+                return;
+
+            this.lines.push(new NmLine(line, this), (newItem, oldItem) => (newItem.size ?? 0) >= (oldItem.size ?? 0) ? newItem : oldItem);
+        };
+
+        const onError = (command: string, error: any, exitCode?: number, stdErr?: string) => {
+            if (exitCode) {
+                outputChannel.appendLine(`Command '${command}' exited with ${exitCode}. Output: ${stdErr}`);
+                vscode.window.showErrorMessage(`Nm-tool: Command '${command}' exited with ${exitCode}. Output: ${stdErr}`);
+            }
+            else {
+                outputChannel.appendLine(`Error: Cloud not run command '${command}' Error: ${error}`);
+                console.error(`Nm-tool: Could not run command '${command}'`, error);
+                vscode.window.showErrorMessage(`Nm-tool: Could not run command '${command}'. Error: ${error}`);
+            }
+        };
+
+        const result = await NmRun.run(this.nmTool, args, processLine, onError);
+        if (result) {
+            const command = [this.nmTool, ...args].join(' ');
+            outputChannel.appendLine(`Command '${command}' resulted in ${this.lines.length} lines`);
+        }
+        return result;
+    }
+
     private async runObjdumpTool(outputChannel: vscode.OutputChannel): Promise<boolean> {
         const args = ['-dCl', this.file.fsPath];
-        const command = [this.objdumpTool].concat(args).join(' ');
 
         const sectionRegex = /^Disassembly of section ([^:]+):$/;
         const labelRegex = /^([0-9A-Fa-f]+)(?: <(.+)>)?:$/;
@@ -227,12 +242,10 @@ export class NmRun {
             const locationMatch = line.match(locationRegex);
             if (locationMatch) {
                 const discriminatorMatch = line.match(discrimatorRegex);
-                if (discriminatorMatch)
-                {
+                if (discriminatorMatch) {
                     lastLocation = line.substring(0, line.length - discriminatorMatch[0].length);
                 }
-                else
-                {
+                else {
                     lastLocation = line;
                 }
                 return;
@@ -248,16 +261,16 @@ export class NmRun {
             if (lastSection) {
                 const labelMatch = line.match(labelRegex);
                 if (labelMatch) {
-                    lastSection.labels.push(new ObjdumpLabel(parseInt(labelMatch[1], 16), labelMatch.at(2) ?? '<no name>', lastSection));
+                    lastSection.labels.push(new ObjdumpLabel(parseInt(labelMatch[1], 16), labelMatch.at(2) ?? '<no name>', lastSection), (newItem, oldItem) => newItem);
                     lastLocation = undefined;
                     return;
                 }
 
-                const lastLabel = lastSection.labels[lastSection.labels.length - 1];
+                const lastLabel = lastSection.labels.last;
                 if (lastLabel) {
                     const instructionMatch = line.match(instructionRegex);
                     if (instructionMatch) {
-                        lastLabel.instructions.push(new ObjdumpInstruction(parseInt(instructionMatch[1], 16), instructionMatch[3], lastLocation, lastLabel));
+                        lastLabel.instructions.push(new ObjdumpInstruction(parseInt(instructionMatch[1], 16), instructionMatch[3], lastLocation, lastLabel), (newItem, oldItem) => newItem);
                         return;
                     }
                 }
@@ -271,65 +284,26 @@ export class NmRun {
             outputChannel.appendLine("Could not parse objdump line: " + line);
         };
 
-        let stderr = '';
-        try {
-            const exitCode = await new Promise((resolve, reject) => {
-                const process = child_process.spawn(this.objdumpTool, args);
-
-                let stdout = '';
-                const processStdOut = () => {
-                    const lines = stdout.split('\n');
-                    stdout = lines.pop() ?? '';
-
-                    for (const line of lines) {
-                        processLine(line);
-                    }
-                };
-
-                process.stdout.on('data', (data) => {
-                    if (data) {
-                        stdout += data;
-                        processStdOut();
-                    }
-                });
-
-                process.stderr.on('data', (data) => {
-                    if (data) {
-                        stderr += data;
-                    }
-                });
-
-                process.on('close', (code) => {
-                    stdout = stdout.trim();
-                    if (stdout != '') {
-                        processLine(stdout);
-                    }
-
-                    resolve(code);
-                });
-                process.on('error', (err) => {
-                    reject(err);
-                });
-            });
-
-            if (exitCode != 0) {
-                outputChannel.appendLine(`Error: Command '${command}' exited with ${exitCode}. Output: ${stderr}`);
-                return false;
+        const onError = (command: string, error: any, exitCode?: number, stdErr?: string) => {
+            if (exitCode) {
+                outputChannel.appendLine(`Error: Command '${command}' exited with ${exitCode}. Output: ${stdErr}`);
             }
             else {
-                outputChannel.appendLine(`Command '${command}' resulted in ${this.sections.length} sections`);
-                return true;
+                outputChannel.appendLine(`Error: Cloud not run command '${command}' Error: ${error}`);
+                console.error(`Nm-tool: Could not run command '${command}'`, error);
             }
+        };
+
+        const result = await NmRun.run(this.objdumpTool, args, processLine, onError);
+        if (result) {
+            const command = [this.objdumpTool, ...args].join(' ');
+            outputChannel.appendLine(`Command '${command}' resulted in ${this.sections.length} sections`);
         }
-        catch (error) {
-            console.dir(error);
-            outputChannel.appendLine(`Error: Cloud not run command '${command}' Error: ${error}`);
-            return false;
-        }
+        return result;
     }
 
     onDelete() {
-        this.lines.length = 0;
+        this.lines.clear();
         this.sections.length = 0;
         this.refs.length = 0;
     }

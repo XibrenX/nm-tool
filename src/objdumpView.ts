@@ -13,10 +13,8 @@ export class ObjdumpView implements vscode.Disposable
     {}
 
     show(runPath: string, address: number) {
-        const label = this.nmStore.runs
-            .find(r => r.file.fsPath == runPath)?.sections
-            .filter(s => s.contains(address))
-            .flatMap(s => s.labels)
+        const label = this.nmStore.runs.get(runPath)?.sections
+            .find(s => s.contains(address))?.labels.as_array()
             .find(l => l.contains(address));
         if (label === undefined)
         {
@@ -26,27 +24,28 @@ export class ObjdumpView implements vscode.Disposable
 
         if (this.view == null)
         {
-            this.view = vscode.window.createWebviewPanel('nmtool-objdumpview', 'Objdump', vscode.ViewColumn.Two, {enableCommandUris: ['nm-tool.viewObjDump', 'nm-tool.editorOpen']});
+            this.view = vscode.window.createWebviewPanel('nmtool-objdumpview', 'Objdump', vscode.ViewColumn.Two, {enableCommandUris: ['nm-tool.viewObjDump', 'nm-tool.editorOpen'], enableScripts: true });
             this.view.onDidDispose(() => {
                 this.view = null;
             });
         }
 
-        this.set(label);
+        this.set(label, address === label.address ? undefined : address);
     }
 
-    public static getObjdumpViewShowCommand(objdumpLabel: ObjdumpLabel): vscode.Command
+    public static getObjdumpViewShowCommand(file: vscode.Uri, address: number): vscode.Command
     {
         return {
             title: 'Show objdumpLabel',
             command: 'nm-tool.viewObjDump',
-            arguments: [objdumpLabel.section.nmRun.file.fsPath, objdumpLabel.address]
+            arguments: [file.fsPath, address]
         };
     }
 
-    private set(label: ObjdumpLabel)
+    private set(label: ObjdumpLabel, address: number | undefined)
     {
-        const instructionTable = label.instructions.map((i) => this.parseInstruction(i)).join('\n');
+        this.view!.title = `Objdump ${label.addressStr}: ${escapeHTML(label.name)}`;
+
         const locationLink = this.parseLocation(label.location) ?? '';
         let info = `Defined in ${label.section.section}`;
         if (label.nmLine?.size)
@@ -54,7 +53,20 @@ export class ObjdumpView implements vscode.Disposable
             info = `Spans ${label.nmLine.size} bytes in ${label.section.section}`;
         }
 
-        this.view!.title = `Objdump ${label.addressStr}: ${escapeHTML(label.name)}`;
+        let referencesHtml: string = '';
+        const references = label.section.nmRun.refsFromOtherLabels(label);
+        if (references.length > 0)
+        {
+            referencesHtml = '<h2>Referenced from</h2>\n<p>';
+            referencesHtml += references.map(r => 
+                `<a href="${ObjdumpView.vscodeCommandToUri(ObjdumpView.getObjdumpViewShowCommand(r.from.label.section.nmRun.file, r.from.address))}" title="To ${r.from.addressStr}">${r.from.addressStr}</a>`
+                + ' in '
+                + `<a href="${ObjdumpView.vscodeCommandToUri(ObjdumpView.getObjdumpViewShowCommand(r.from.label.section.nmRun.file, r.from.label.address))}" title="To ${r.from.label.addressStr} ${escapeHTML(r.from.label.name)}">${r.from.label.addressStr} (${escapeHTML(ObjdumpView.truncateLargeString(r.from.label.name, 32))})</a>`
+            ).join('<br />\n');
+            referencesHtml += '</p>';
+        }
+
+        const instructionTable = label.instructions.as_array().map((i) => this.parseInstruction(i)).join('\n');
 
         this.view!.webview.html = `<!DOCTYPE html>
 <html lang="en">
@@ -63,6 +75,11 @@ export class ObjdumpView implements vscode.Disposable
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>${this.view!.title}</title>
     <style>
+        .address
+        {
+            color: var(--vscode-editorLineNumber-foreground);
+            text-align: right;
+        }
         .disassembly
         {
             background: var(--vscode-editor-background);
@@ -70,32 +87,65 @@ export class ObjdumpView implements vscode.Disposable
             font-family: var(--vscode-editor-font-family);
             width: 100%;
             white-space: nowrap;
+            border-collapse: collapse;
+            border-spacing: 0;
         }
-        .address
+        .disassembly td
         {
-            color: var(--vscode-editorLineNumber-foreground);
-            text-align: right;
+            padding: 2px 0.5em;
+        }
+        .disassembly td.address
+        {
             padding-right: 2em;
         }
-        tr:hover > .address
-        {
-            color: var(--vscode-editorLineNumber-activeForeground);
-        }
-        .comment
+        .disassembly td.sourcefile
         {
             white-space: normal;
             padding-left: 2em;
         }
-        tr:target
+        .disassembly tr.selected
         {
             background: var(--vscode-editor-selectionHighlightBackground);
         }
+        .disassembly tr:hover > .address
+        {
+            color: var(--vscode-editorLineNumber-activeForeground);
+        }
     </style>
+    <script>
+        const startAddress = ${address};
+
+        function onLoad()
+        {
+            if (startAddress)
+            {
+                select(startAddress);
+            }
+        }
+
+        function select(address)
+        {
+            for(const selectedElement of document.getElementsByClassName('selected'))
+            {
+                selectedElement.classList.remove('selected');
+            }
+
+            const targetElement = document.getElementById(address.toString(16));
+            if (targetElement)
+            {
+                targetElement.classList.add('selected');
+                targetElement.scrollIntoView({behavior: 'smooth', block: 'nearest'});
+            }
+        }
+
+        document.addEventListener("DOMContentLoaded", onLoad);
+    </script>
 </head>
 <body>
     <h1>${label.addressStr}: ${escapeHTML(label.name)}</h1>
     <p>${info}</p>
     <p>${locationLink}</p>
+    ${referencesHtml}
     <h2>Disassembly</h2>
     <table class="disassembly">
         ${instructionTable}
@@ -114,11 +164,11 @@ export class ObjdumpView implements vscode.Disposable
             let refA: string;
             if (ref.label === instruction.label)
             {
-                refA = `<a href="#${ref.addressStr}" title="To ${ref.addressStr}">${ref.addressStr}</a>`;
+                refA = `<a href="#${ref.addressStr}" onclick="select(0x${ref.addressStr}); return false;" title="To ${ref.addressStr}">${ref.addressStr}</a>`;
             }
             else
             {
-                refA = `<a href="${ObjdumpView.vscodeCommandToUri(ObjdumpView.getObjdumpViewShowCommand(ref.label))}" title="To ${ref.addressStr} ${escapeHTML(ref.label.name)}">${ref.addressStr} (${escapeHTML(ObjdumpView.truncateLargeString(ref.label.name, 32))})</a>`;
+                refA = `<a href="${ObjdumpView.vscodeCommandToUri(ObjdumpView.getObjdumpViewShowCommand(ref.label.section.nmRun.file, ref.address))}" title="To ${ref.addressStr} ${escapeHTML(ref.label.name)}">${ref.addressStr} (${escapeHTML(ObjdumpView.truncateLargeString(ref.label.name, 32))})</a>`;
             }
 
             const assemblyArgumentsLower = assemblyArguments.toLowerCase();
@@ -158,7 +208,7 @@ export class ObjdumpView implements vscode.Disposable
             <td class="address">${instruction.addressStr}</td>
             <td>${escapeHTML(instruction.assemblyInstruction)}</td>
             <td>${assemblyArguments}</td>
-            <td class="comment">${this.parseLocation(instruction.location)}</td>
+            <td class="sourcefile">${this.parseLocation(instruction.location)}</td>
         </tr>`;
     }
 

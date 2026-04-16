@@ -34,7 +34,7 @@ class GlobalNmLineTreeItem extends vscode.TreeItem
         super(`${nmLine.type} ${size}`, nmLine.objdumpLabel === undefined ? vscode.TreeItemCollapsibleState.None : vscode.TreeItemCollapsibleState.Collapsed);
 
         this.description = nmLine.name;
-        this.tooltip = `${nmLine.address.toString(16)} ${this.description}`;
+        this.tooltip = `${nmLine.addressStr} ${this.description}`;
 
         if (nmLine.file !== undefined)
         {
@@ -50,7 +50,7 @@ class GlobalNmLineTreeItem extends vscode.TreeItem
         } 
         else if (this.nmLine.objdumpLabel)
         {
-            const objDumpViewCommand = ObjdumpView.getObjdumpViewShowCommand(this.nmLine.objdumpLabel);
+            const objDumpViewCommand = ObjdumpView.getObjdumpViewShowCommand(this.nmLine.run.file, this.nmLine.objdumpLabel.address);
             this.command = {
                 title: 'Show objdump',
                 command: objDumpViewCommand.command,
@@ -68,7 +68,7 @@ class ObjdumpInstructionRefTreeItem extends vscode.TreeItem
     constructor(public readonly instruction: ObjdumpInstruction, public readonly parents: ObjdumpLabel[])
     {
         const isRecursive = parents.some(l => l === instruction.label);
-        super(`Called from ${instruction.addressStr}${isRecursive ? ' (recursive)' : ''}`, isRecursive ? vscode.TreeItemCollapsibleState.None : vscode.TreeItemCollapsibleState.Collapsed);
+        super(`Reference from ${instruction.addressStr}${isRecursive ? ' (recursive)' : ''}`, isRecursive ? vscode.TreeItemCollapsibleState.None : vscode.TreeItemCollapsibleState.Collapsed);
         this.description = `in ${instruction.label.addressStr} ${instruction.label.name}`;
         this.tooltip = instruction.location;
         
@@ -82,7 +82,7 @@ class ObjdumpInstructionRefTreeItem extends vscode.TreeItem
         }
         else
         {
-            this.command = ObjdumpView.getObjdumpViewShowCommand(instruction.label);
+            this.command = ObjdumpView.getObjdumpViewShowCommand(instruction.label.section.nmRun.file, instruction.address);
         }
     }
 }
@@ -114,8 +114,7 @@ export class GlobalNmDataProvider implements vscode.TreeDataProvider<GlobalNmTre
             }
             else
             {
-                const childeren = element.instruction.label.section.nmRun.refs
-                    .filter(r => r.to.label === element.instruction.label && r.from.label !== element.instruction.label)
+                const childeren = element.instruction.label.section.nmRun.refsFromOtherLabels(element.instruction.label)
                     .map(r => new ObjdumpInstructionRefTreeItem(r.from, element.parents.splice(element.parents.length, 0, element.instruction.label)));
                 if (childeren.length === 0)
                 {
@@ -130,8 +129,7 @@ export class GlobalNmDataProvider implements vscode.TreeDataProvider<GlobalNmTre
         {
             if (element.nmLine.objdumpLabel)
             {
-                const childeren = element.nmLine.run.refs
-                    .filter(r => r.to.label === element.nmLine.objdumpLabel && r.from.label !== element.nmLine.objdumpLabel)
+                const childeren = element.nmLine.run.refsFromOtherLabels(element.nmLine.objdumpLabel)
                     .map(r => new ObjdumpInstructionRefTreeItem(r.from, [element.nmLine.objdumpLabel!]));
                 if (childeren.length === 0)
                 {
@@ -147,18 +145,18 @@ export class GlobalNmDataProvider implements vscode.TreeDataProvider<GlobalNmTre
         }
 
         if (element instanceof GlobalNmTypeTreeItem) {
-            return element.nmRun.lines.filter(l => l.type == element.type).sort((la, lb) => (lb.size ?? -1) - (la.size ?? -1)).slice(0, 100).map(l => new GlobalNmLineTreeItem(l));
+            return element.nmRun.lines.as_array().filter(l => l.type == element.type).sort((la, lb) => (lb.size ?? -1) - (la.size ?? -1)).slice(0, 100).map(l => new GlobalNmLineTreeItem(l));
         }
 
         let nmRun: NmRun | undefined;
         if (element === undefined) {
             if (this.nmStore.runs.length == 1)
             {
-                nmRun = this.nmStore.runs[0];
+                nmRun = this.nmStore.runs.at(0)!;
             }
             else
             {
-                return this.nmStore.runs.map((r) => new GlobalNmRunTreeItem(r, this.nmStore)).sort((a, b) => a.label! > b.label! ? 1 : -1);
+                return this.nmStore.runs.as_array().map((r) => new GlobalNmRunTreeItem(r, this.nmStore)).sort((a, b) => a.label! > b.label! ? 1 : -1);
             }
         } else if (element instanceof GlobalNmRunTreeItem ) {
             nmRun = element.nmRun;

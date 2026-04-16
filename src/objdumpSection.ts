@@ -1,12 +1,13 @@
+import { KeyedSortedSet } from "./KeyedSortedSet";
 import { NmRun } from "./nmRun";
 import { ObjdumpLabel } from "./objdumpLabel";
 
 export class ObjdumpSection
 {
-    public labels: ObjdumpLabel[] = [];
+    public labels = new KeyedSortedSet<number, ObjdumpLabel>(l => l.address);
 
     public get address() { return this.labels.at(0)?.address ?? 0; }
-    public get lastAddress() { return this.labels.at(this.labels.length - 1)?.address ?? this.address; }
+    public get lastAddress() { return this.labels.last?.address ?? this.address; }
 
     constructor(public readonly section: string, public readonly nmRun: NmRun)
     {}

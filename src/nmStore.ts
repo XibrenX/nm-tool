@@ -2,20 +2,22 @@ import * as vscode from 'vscode';
 import { AsyncOperationsStore } from './asyncOperationsStore';
 import { NmRun } from './nmRun';
 import path = require('path');
+import { KeyedSortedSet } from './KeyedSortedSet';
 
 const DEFAULT_INPUT_FILES: string = '**/*.elf';
 
 export class NmStore
 {
     private readonly _asyncOperationsStore = new AsyncOperationsStore();
-    private readonly _nmRuns = new Map<string, NmRun>();
+
     private _watcher: vscode.FileSystemWatcher;
     private readonly _changeConfigurationListener: vscode.Disposable;
 
     private _inputFiles: string;
 
     public get onFilesUpdated(): vscode.Event<void> { return this._asyncOperationsStore.onAllOperationsDone; }
-    public get runs(): NmRun[] { return Array.from(this._nmRuns.values()); }
+
+    public readonly runs = new KeyedSortedSet<string, NmRun>(i => i.file.fsPath);
 
     constructor(public readonly outputChannel: vscode.OutputChannel)
     {
@@ -54,14 +56,12 @@ export class NmStore
                 for (const run of this.runs) {
                     run.onDelete();
                 }
-                this._nmRuns.clear();
+                this.runs.clear();
 
                 const uris = await vscode.workspace.findFiles(this._inputFiles, null);
                 await Promise.all(uris.map(async uri => {
                     try{
-                        const nmRun = this._nmRuns.get(uri.fsPath) ?? new NmRun(uri);
-                        this._nmRuns.set(uri.fsPath, nmRun);
-
+                        const nmRun = this.runs.getOrAdd(uri.fsPath, () => new NmRun(uri));
                         await nmRun.update(this.outputChannel);
                     } 
                     catch (error)
@@ -72,7 +72,7 @@ export class NmStore
 
                 progress.report({ increment: 100 });
 
-                if (this._nmRuns.size == 0) {
+                if (this.runs.length == 0) {
                     vscode.window.showWarningMessage(`Nm-tool: No files found matching ${this._inputFiles}. This pattern can be changed in the settings under #nmTool.inputFiles#`);
                 }
             });
@@ -81,19 +81,19 @@ export class NmStore
 
     onAddOrUpdate(uri: vscode.Uri) {
         this._asyncOperationsStore.addOperation(async () => {
-            const suFile = this._nmRuns.get(uri.fsPath) ?? new NmRun(uri);
-            this._nmRuns.set(uri.fsPath, suFile);
-            await suFile.update(this.outputChannel);
+            const nmRun = this.runs.getOrAdd(uri.fsPath, () => new NmRun(uri));
+            await nmRun.update(this.outputChannel);
         });
     }
 
     onDelete(uri: vscode.Uri) {
         this._asyncOperationsStore.addOperation(async () => {
-            const suFile = this._nmRuns.get(uri.fsPath);
-            if (suFile) {
-                suFile.onDelete();
+            const nmRun = this.runs.get(uri.fsPath);
+            if (nmRun) {
+                nmRun.onDelete();
+                this.runs.delete(uri.fsPath);
             }
-            this._nmRuns.delete(uri.fsPath);
+
         });
     }
 
@@ -101,14 +101,15 @@ export class NmStore
         this._asyncOperationsStore.dispose();
         this._watcher.dispose();
         this._changeConfigurationListener.dispose();
-        this._nmRuns.clear();
+        this.runs.clear();
     }
 
     getUniquePart(nmRun: NmRun): string
     {
         const nmRunPath = nmRun.file.fsPath;
         const otherNmRunPaths: string[] = [];
-        for (const otherNmRun of this._nmRuns.values())
+
+        for (const otherNmRun of this.runs)
         {
             const otherNmRunPath = otherNmRun.file.fsPath;
             if (otherNmRunPath != nmRunPath)
