@@ -208,7 +208,7 @@ export class ObjdumpView implements vscode.Disposable
             <td class="address">${instruction.addressStr}</td>
             <td>${escapeHTML(instruction.assemblyInstruction)}</td>
             <td>${assemblyArguments}</td>
-            <td class="sourcefile">${this.parseLocation(instruction.location)}</td>
+            <td class="sourcefile">${this.parseLocation(instruction.location) ?? ''}</td>
         </tr>`;
     }
 
