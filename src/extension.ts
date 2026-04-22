@@ -4,6 +4,10 @@ import { NmStore } from './nmStore';
 import { CurrentFileNmDataProvider, CurrentFileNmRunTreeItem } from './currentFileNmDataProvider';
 import { GlobalNmDataProvider, GlobalNmRunTreeItem } from './globalNmDataProvider';
 import { ObjdumpView } from './objdumpView';
+import { NmRun } from './nmRun';
+import { ObjdumpSection } from './objdumpSection';
+import { ObjdumpSymbol } from './objdumpSymbol';
+import { ObjdumpInstruction } from './objdumpInstruction';
 
 export function decodeLocation(location: string): vscode.Location {
 	const lineNumberRegex = /:\d+$/;
@@ -27,7 +31,7 @@ export function activate(context: vscode.ExtensionContext) {
 	const nmStore = new NmStore(outputChannel);
 	context.subscriptions.push(nmStore);
 
-	const objDumpView = new ObjdumpView(nmStore);
+	const objDumpView = new ObjdumpView(nmStore, context.extensionUri);
 	context.subscriptions.push(objDumpView);
 
 	const codeLensProvider = new CodeLensProvider(nmStore);
@@ -43,8 +47,58 @@ export function activate(context: vscode.ExtensionContext) {
 		vscode.commands.registerCommand('nm-tool.copyPath', (item: GlobalNmRunTreeItem | CurrentFileNmRunTreeItem) => {
 			vscode.env.clipboard.writeText(item.nmRun.file.fsPath);
 		}),
-		vscode.commands.registerCommand('nm-tool.viewObjDump', (runPath: string, address: number) => {
-			objDumpView.show(runPath, address);
+		vscode.commands.registerCommand('nm-tool.viewObjDump', (runPath: string, addressOrSectionName?: number | string) => {
+			const run = nmStore.runs.get(runPath);
+
+			if (run === undefined) {
+				console.error("Could not find nmRun with path: " + runPath);
+				return;
+			}
+
+			let showTarget: NmRun | ObjdumpSection | ObjdumpSymbol = run;
+			let address: number | undefined;
+			if (addressOrSectionName !== undefined) {
+				if (typeof addressOrSectionName === 'number') {
+					address = addressOrSectionName;
+					const found = run.getFromAddress(address);
+					if (found instanceof ObjdumpInstruction) {
+						showTarget = found.symbol;
+					}
+					else if (found instanceof ObjdumpSymbol) {
+						showTarget = found;
+					}
+					else if (found instanceof ObjdumpSection) {
+						showTarget = found;
+					}
+					else {
+						console.error(`Could not find something with address: ${address.toString(16)} in ${runPath}`);
+						return;
+					}
+				}
+				else if (typeof addressOrSectionName === 'string') {
+					const sectionName = addressOrSectionName;
+					const foundSection = run.sections.as_array().find(s => s.name === sectionName);
+					if (foundSection) {
+						showTarget = foundSection;
+					}
+					else {
+						console.error(`Could not find section: ${sectionName} in ${runPath}`);
+						return;
+					}
+				}
+			}
+
+			objDumpView.show();
+
+			if (showTarget instanceof ObjdumpSymbol) {
+				objDumpView.setSymbol(showTarget, address);
+			}
+			else if (showTarget instanceof ObjdumpSection) {
+				objDumpView.setSection(showTarget);
+			}
+			else if (showTarget instanceof NmRun) {
+				objDumpView.setBinary(showTarget);
+			}
 		}),
 		vscode.commands.registerCommand('nm-tool.editorOpen', async (location: string, viewColumn?: vscode.ViewColumn) => {
 			const decodedLocation = decodeLocation(location);

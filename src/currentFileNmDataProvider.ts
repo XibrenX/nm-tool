@@ -1,11 +1,10 @@
 import * as vscode from 'vscode';
 import { NmStore } from './nmStore';
-import { NmLine } from './nmLine';
+import { NmSymbol } from './nmSymbol';
 import { NmRun } from './nmRun';
 
 export class CurrentFileNmRunTreeItem extends vscode.TreeItem {
-    constructor(public readonly nmRun: NmRun, nmStore: NmStore)
-    {
+    constructor(public readonly nmRun: NmRun, nmStore: NmStore) {
         super(nmStore.getUniquePart(nmRun), vscode.TreeItemCollapsibleState.Expanded);
         this.tooltip = `${nmRun.file.fsPath}\n${nmRun.nmTool}`;
         this.resourceUri = nmRun.file;
@@ -14,14 +13,13 @@ export class CurrentFileNmRunTreeItem extends vscode.TreeItem {
 }
 
 class CurrentFileNmLineTreeItem extends vscode.TreeItem {
-    constructor(public readonly nmLine: NmLine) {
+    constructor(public readonly nmLine: NmSymbol) {
         const size = nmLine.size?.toString() ?? "?";
         super(`${nmLine.type} ${size}`);
 
         this.description = nmLine.name;
 
-        if (this.nmLine.line !== undefined)
-        {
+        if (this.nmLine.line !== undefined) {
             this.description = `Line ${this.nmLine.line} ${this.description}`;
         }
     }
@@ -30,8 +28,7 @@ class CurrentFileNmLineTreeItem extends vscode.TreeItem {
 type CurrentFileNmTreeItem = CurrentFileNmRunTreeItem | CurrentFileNmLineTreeItem
 
 
-export class CurrentFileNmDataProvider implements vscode.TreeDataProvider<CurrentFileNmTreeItem>
-{
+export class CurrentFileNmDataProvider implements vscode.TreeDataProvider<CurrentFileNmTreeItem> {
     private readonly _onDidChangeTreeData = new vscode.EventEmitter<void>();
 
     constructor(private readonly nmStore: NmStore) {
@@ -56,21 +53,19 @@ export class CurrentFileNmDataProvider implements vscode.TreeDataProvider<Curren
             if (this.nmStore.runs.length == 1) {
                 nmRun = this.nmStore.runs.at(0)!;
             } else {
-                return this.nmStore.runs.as_array().filter((r) => r.lines.as_array().some(l => l.matchesFileName(filename))).map((r) => new CurrentFileNmRunTreeItem(r, this.nmStore));
+                return this.nmStore.runs.as_array().filter((r) => r.symbols.as_array().some(l => l.matchesFileName(filename))).map((r) => new CurrentFileNmRunTreeItem(r, this.nmStore));
             }
-        } else if (element instanceof CurrentFileNmRunTreeItem ) {
+        } else if (element instanceof CurrentFileNmRunTreeItem) {
             nmRun = element.nmRun;
         } else {
             return [];
         }
 
-        return nmRun.lines.as_array().filter(l => l.matchesFileName(filename)).sort((la, lb) => (lb.size ?? -1) - (la.size ?? -1)).map(l => new CurrentFileNmLineTreeItem(l));
+        return nmRun.symbols.as_array().filter(l => l.matchesFileName(filename)).sort((la, lb) => (lb.size ?? -1) - (la.size ?? -1)).map(l => new CurrentFileNmLineTreeItem(l));
     }
 
-    resolveTreeItem(item: vscode.TreeItem, element: CurrentFileNmTreeItem, token: vscode.CancellationToken): vscode.ProviderResult<vscode.TreeItem>
-    {
-        if (element instanceof CurrentFileNmLineTreeItem)
-        {
+    resolveTreeItem(item: vscode.TreeItem, element: CurrentFileNmTreeItem, token: vscode.CancellationToken): vscode.ProviderResult<vscode.TreeItem> {
+        if (element instanceof CurrentFileNmLineTreeItem) {
             const activeTextEditor = vscode.window.activeTextEditor;
             if (activeTextEditor && element.nmLine.line) {
                 item.command = { title: 'Jump to position', command: 'editor.action.goToLocations', arguments: [activeTextEditor.document.uri, activeTextEditor.selection.start, [new vscode.Location(activeTextEditor.document.uri, new vscode.Position(element.nmLine.line - 1, 0))], 'goto', 'Position not found'] };

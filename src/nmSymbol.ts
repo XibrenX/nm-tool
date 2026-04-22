@@ -1,9 +1,9 @@
 import * as path from 'path';
 import { NmRun } from "./nmRun";
-import { ObjdumpLabel } from './objdumpLabel';
+import { ObjdumpSymbol } from './objdumpSymbol';
 import * as vscode from 'vscode';
 
-export class NmLine {
+export class NmSymbol {
     public readonly address: number;
     public readonly size?: number;
     public readonly type: string;
@@ -11,10 +11,19 @@ export class NmLine {
     public readonly file?: string;
     public readonly line?: number;
 
-    public objdumpLabel?: ObjdumpLabel;
+    public objdumpSymbol?: ObjdumpSymbol;
 
     public get addressStr() { return this.address.toString(16); }
     public get position() { return this.line ? new vscode.Position(this.line - 1, 0) : undefined; }
+
+    public get location() {
+        if (this.file) {
+            if (this.line) {
+                return `${this.file}:${this.line}`;
+            }
+            return this.file;
+        }
+    }
 
     constructor(line: string, public readonly run: NmRun) {
         const lineParts = line.split(' ');
@@ -57,14 +66,11 @@ export class NmLine {
         }
     }
 
-    contains(address: number)
-    {
-        if (this.size)
-        {
+    contains(address: number) {
+        if (this.size) {
             return this.address <= address && this.address + this.size > address;
         }
-        else
-        {
+        else {
             return false;
         }
     }

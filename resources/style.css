@@ -1,0 +1,52 @@
+a.extern {
+    color: var(--vscode-editorWarning-foreground);
+}
+
+table {
+    background: var(--vscode-editor-background);
+    color: var(--vscode-editor-foreground);
+    font-family: var(--vscode-editor-font-family);
+    width: 100%;
+    white-space: nowrap;
+    border-collapse: collapse;
+    border-spacing: 0;
+}
+
+td.sourcefile {
+    white-space: normal;
+    padding-left: 2em;
+}
+
+tr.selected {
+    background: var(--vscode-editor-selectionHighlightBackground);
+}
+
+th {
+    text-align: left;
+}
+
+.address {
+    color: var(--vscode-editorLineNumber-foreground);
+    text-align: right;
+}
+
+tr:hover .address {
+    color: var(--vscode-editorLineNumber-activeForeground);
+}
+
+.disassembly td {
+    padding: 2px 0.5em;
+}
+
+.disassembly td.address {
+    padding-right: 2em;
+}
+
+.symbols td,
+th {
+    padding: 2px 0.5em;
+}
+
+.symbols td.address.size {
+    padding-right: 2em;
+}

@@ -1,32 +1,29 @@
 import { KeyedSortedSet } from "./KeyedSortedSet";
 import { NmRun } from "./nmRun";
-import { ObjdumpLabel } from "./objdumpLabel";
+import { ObjdumpSymbol } from "./objdumpSymbol";
 
-export class ObjdumpSection
-{
-    public labels = new KeyedSortedSet<number, ObjdumpLabel>(l => l.address);
+export class ObjdumpSection {
+    public symbols = new KeyedSortedSet<number, ObjdumpSymbol>(l => l.address);
 
-    public get address() { return this.labels.at(0)?.address ?? 0; }
-    public get lastAddress() { return this.labels.last?.address ?? this.address; }
+    public flags: string[] = [];
 
-    constructor(public readonly section: string, public readonly nmRun: NmRun)
-    {}
+    constructor(public readonly nmRun: NmRun, public readonly name: string, public readonly address: number, public readonly size: number) { }
 
-    public contains(address: number)
-    {
-        const last: ObjdumpLabel | undefined = this.labels.at(this.labels.length - 1);
-        if (last)
-        {
-            if (last.nmLine?.size)
-            {
-                return this.address <= address && last.address + last.nmLine.size > address;
-            }
-            else
-            {
-                return this.address <= address && last.lastAddress >= address;
+    public contains(address: number) {
+        return address >= this.address && address < this.address + this.size;
+    }
+
+    public symbolFromAddress(address: number): ObjdumpSymbol | undefined {
+        if (this.contains(address)) {
+            const search = this.symbols.binarySearch(address);
+            if (search.item)
+                return search.item;
+            if (search.index > 0 && this.symbols.length >= search.index) {
+                const previous = this.symbols.at(search.index - 1);
+                if (previous?.contains(address)) {
+                    return previous;
+                }
             }
         }
-
-        return this.address === address;
     }
 }

@@ -6,8 +6,7 @@ import { KeyedSortedSet } from './KeyedSortedSet';
 
 const DEFAULT_INPUT_FILES: string = '**/*.elf';
 
-export class NmStore
-{
+export class NmStore {
     private readonly _asyncOperationsStore = new AsyncOperationsStore();
 
     private _watcher: vscode.FileSystemWatcher;
@@ -19,8 +18,7 @@ export class NmStore
 
     public readonly runs = new KeyedSortedSet<string, NmRun>(i => i.file.fsPath);
 
-    constructor(public readonly outputChannel: vscode.OutputChannel)
-    {
+    constructor(public readonly outputChannel: vscode.OutputChannel) {
         this._inputFiles = vscode.workspace.getConfiguration('nmTool').get<string>('inputFiles') ?? DEFAULT_INPUT_FILES;
 
         this._watcher = vscode.workspace.createFileSystemWatcher(this._inputFiles);
@@ -29,8 +27,7 @@ export class NmStore
         this._watcher.onDidDelete(uri => this.onDelete(uri));
 
         this._changeConfigurationListener = vscode.workspace.onDidChangeConfiguration(e => {
-            if (e.affectsConfiguration('nmTool'))
-            {
+            if (e.affectsConfiguration('nmTool')) {
                 this._inputFiles = vscode.workspace.getConfiguration('nmTool').get<string>('inputFiles') ?? DEFAULT_INPUT_FILES;
 
                 this._watcher.dispose();
@@ -60,12 +57,11 @@ export class NmStore
 
                 const uris = await vscode.workspace.findFiles(this._inputFiles, null);
                 await Promise.all(uris.map(async uri => {
-                    try{
+                    try {
                         const nmRun = this.runs.getOrAdd(uri.fsPath, () => new NmRun(uri));
                         await nmRun.update(this.outputChannel);
-                    } 
-                    catch (error)
-                    {
+                    }
+                    catch (error) {
                         console.error(`Error while processing nmRun: ${uri.fsPath}`, error);
                     }
                 }));
@@ -104,25 +100,21 @@ export class NmStore
         this.runs.clear();
     }
 
-    getUniquePart(nmRun: NmRun): string
-    {
+    getUniquePart(nmRun: NmRun): string {
         const nmRunPath = nmRun.file.fsPath;
         const otherNmRunPaths: string[] = [];
 
-        for (const otherNmRun of this.runs)
-        {
+        for (const otherNmRun of this.runs) {
             const otherNmRunPath = otherNmRun.file.fsPath;
-            if (otherNmRunPath != nmRunPath)
-            {
+            if (otherNmRunPath != nmRunPath) {
                 otherNmRunPaths.push(otherNmRunPath);
             }
         }
 
         let pathPartIndex = nmRunPath.lastIndexOf(path.sep);
-        while (pathPartIndex >= 0)
-        {          
+        while (pathPartIndex >= 0) {
             const pathPart = nmRunPath.substring(pathPartIndex + 1);
-            if (!otherNmRunPaths.some((otherNmRunPath)=> otherNmRunPath.endsWith(pathPart)))
+            if (!otherNmRunPaths.some((otherNmRunPath) => otherNmRunPath.endsWith(pathPart)))
                 return pathPart;
             pathPartIndex = nmRunPath.lastIndexOf(path.sep, pathPartIndex - 1);
         }

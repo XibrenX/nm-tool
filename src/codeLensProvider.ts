@@ -1,12 +1,12 @@
 import * as vscode from 'vscode';
 import { NmStore } from './nmStore';
-import { NmLine } from './nmLine';
+import { NmSymbol } from './nmSymbol';
 import { ObjdumpView } from './objdumpView';
 import { ObjdumpInstruction } from './objdumpInstruction';
 import { decodeLocation } from './extension';
 
 export class NmLineCodeLens extends vscode.CodeLens {
-    constructor(nmLine: NmLine, nmStore: NmStore) {
+    constructor(nmLine: NmSymbol, nmStore: NmStore) {
         if (nmLine.line === undefined)
             throw new Error();
 
@@ -17,8 +17,8 @@ export class NmLineCodeLens extends vscode.CodeLens {
             title += ` in ${nmStore.getUniquePart(nmLine.run)}`;
 
         let name = nmLine.name;
-        if (nmLine.objdumpLabel) {
-            name += ` in ${nmLine.objdumpLabel.section.section}`;
+        if (nmLine.objdumpSymbol) {
+            name += ` in ${nmLine.objdumpSymbol.section.name}`;
         }
         const tooltip = `${name}\n\n${nmLine.run.file.fsPath}:${nmLine.addressStr}`;
 
@@ -26,8 +26,8 @@ export class NmLineCodeLens extends vscode.CodeLens {
             title: title, tooltip: tooltip, command: ''
         };
 
-        if (nmLine.objdumpLabel) {
-            const objDumpViewCommand = ObjdumpView.getObjdumpViewShowCommand(nmLine.run.file, nmLine.objdumpLabel.address);
+        if (nmLine.objdumpSymbol) {
+            const objDumpViewCommand = ObjdumpView.getObjdumpViewShowCommandFromAddress(nmLine.run.file, nmLine.objdumpSymbol.address);
             command.command = objDumpViewCommand.command;
             command.arguments = objDumpViewCommand.arguments;
         }
@@ -37,12 +37,12 @@ export class NmLineCodeLens extends vscode.CodeLens {
 }
 
 export class RefsCodeLens extends vscode.CodeLens {
-    constructor(documentUri: vscode.Uri, nmLine: NmLine, nmStore: NmStore, calls: ObjdumpInstruction[]) {
+    constructor(documentUri: vscode.Uri, nmLine: NmSymbol, nmStore: NmStore, calls: ObjdumpInstruction[]) {
         let title = `Nm: ${calls.length} refs`;
         if (nmStore.runs.length > 1)
             title += ` in ${nmStore.getUniquePart(nmLine.run)}`;
 
-        const tooltip = calls.map(i => `Referenced at ${i.addressStr} in ${i.label.addressStr} ${i.label.name}` + (i.location === undefined ? '' : `\n   ${i.location}`)).join('\n');
+        const tooltip = calls.map(i => `Referenced at ${i.addressStr} in ${i.symbol.addressStr} ${i.symbol.name}` + (i.location === undefined ? '' : `\n   ${i.location}`)).join('\n');
 
         const range = new vscode.Range(nmLine.position!, nmLine.position!);
         const locations = calls.filter(i => i.location !== undefined).map(i => decodeLocation(i.location!));
@@ -71,16 +71,16 @@ export class CodeLensProvider implements vscode.CodeLensProvider<CodeLensItem> {
         const codeLenses: CodeLensItem[] = [];
 
         for (const run of this.nmStore.runs) {
-            for (const line of run.lines) {
+            for (const line of run.symbols) {
                 if (!line.matchesFileName(document.fileName) || line.line === undefined)
                     continue;
 
                 if (line.size !== undefined) {
                     codeLenses.push(new NmLineCodeLens(line, this.nmStore));
                 }
-                
-                if (line.objdumpLabel !== undefined) {
-                    const refs = run.refsFromOtherLabels(line.objdumpLabel);
+
+                if (line.objdumpSymbol !== undefined) {
+                    const refs = run.refsFromOtherLabels(line.objdumpSymbol);
                     if (refs.length > 0) {
                         codeLenses.push(new RefsCodeLens(document.uri, line, this.nmStore, refs.map(r => r.from)));
                     }
