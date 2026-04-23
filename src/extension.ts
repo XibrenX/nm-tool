@@ -47,7 +47,22 @@ export function activate(context: vscode.ExtensionContext) {
 		vscode.commands.registerCommand('nm-tool.copyPath', (item: GlobalNmRunTreeItem | CurrentFileNmRunTreeItem) => {
 			vscode.env.clipboard.writeText(item.nmRun.file.fsPath);
 		}),
-		vscode.commands.registerCommand('nm-tool.viewObjDump', (runPath: string, addressOrSectionName?: number | string) => {
+		vscode.commands.registerCommand('nm-tool.showObjdump', async (runPath?: string, addressOrSectionName?: number | string) => {
+			if (!runPath) {
+				if (nmStore.runs.length === 0) {
+					return;
+				} else if (nmStore.runs.length === 1) {
+					runPath = nmStore.runs.at(0)!.file.fsPath;
+				}
+				else {
+					runPath = await vscode.window.showQuickPick(nmStore.runs.as_array().map(r => r.file.fsPath), { title: "Select a file to show in objdump", canPickMany: false });
+					if (!runPath) {
+						return;
+					}
+				}
+			}
+
+
 			const run = nmStore.runs.get(runPath);
 
 			if (run === undefined) {

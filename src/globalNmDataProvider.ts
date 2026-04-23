@@ -41,7 +41,7 @@ class GlobalNmLineTreeItem extends vscode.TreeItem {
             this.tooltip += '\n\n' + goTo;
         }
         else if (this.nmLine.objdumpSymbol) {
-            const objDumpViewCommand = ObjdumpView.getObjdumpViewShowCommandFromAddress(this.nmLine.run.file, this.nmLine.objdumpSymbol.address);
+            const objDumpViewCommand = ObjdumpView.getObjdumpViewShowCommandFromAddress(this.nmLine.objdumpSymbol);
             this.command = {
                 title: 'Show objdump',
                 command: objDumpViewCommand.command,
@@ -69,7 +69,7 @@ class ObjdumpInstructionRefTreeItem extends vscode.TreeItem {
             };
         }
         else {
-            this.command = ObjdumpView.getObjdumpViewShowCommandFromAddress(instruction.symbol.section.nmRun.file, instruction.address);
+            this.command = ObjdumpView.getObjdumpViewShowCommandFromAddress(instruction);
         }
     }
 }

@@ -15,26 +15,36 @@ export class ObjdumpView implements vscode.Disposable {
 
     show() {
         if (this.view == null) {
-            this.view = vscode.window.createWebviewPanel('nmtool-objdumpview', 'Objdump', vscode.ViewColumn.Two, { enableCommandUris: ['nm-tool.viewObjDump', 'nm-tool.editorOpen'], enableScripts: true });
+            this.view = vscode.window.createWebviewPanel('nmtool-objdumpview', 'Objdump', vscode.ViewColumn.Two, { enableCommandUris: ['nm-tool.showObjdump', 'nm-tool.editorOpen'], enableScripts: true });
             this.view.onDidDispose(() => {
                 this.view = null;
             });
         }
     }
 
-    public static getObjdumpViewShowCommandFromAddress(file: vscode.Uri, address: number): vscode.Command {
+    public static getObjdumpViewShowCommandFromAddress(instructionOrSymbol: ObjdumpInstruction | ObjdumpSymbol): vscode.Command {
+        const nmRun = (instructionOrSymbol instanceof ObjdumpInstruction ? instructionOrSymbol.symbol : instructionOrSymbol).section.nmRun;
+
         return {
             title: 'Show objdumpLabel',
-            command: 'nm-tool.viewObjDump',
-            arguments: [file.fsPath, address]
+            command: 'nm-tool.showObjdump',
+            arguments: [nmRun.file.fsPath, instructionOrSymbol.address]
         };
     }
 
-    public static getObjdumpViewShowCommandFromSection(file: vscode.Uri, section: string): vscode.Command {
+    public static getObjdumpViewShowCommandFromSection(section: ObjdumpSection): vscode.Command {
         return {
             title: 'Show objdumpLabel',
-            command: 'nm-tool.viewObjDump',
-            arguments: [file.fsPath, section]
+            command: 'nm-tool.showObjdump',
+            arguments: [section.nmRun.file.fsPath, section.name]
+        };
+    }
+
+    public static getObjdumpViewShowCommandFromNmRun(binary: NmRun): vscode.Command {
+        return {
+            title: 'Show objdumpLabel',
+            command: 'nm-tool.showObjdump',
+            arguments: [binary.file.fsPath]
         };
     }
 
@@ -44,7 +54,7 @@ export class ObjdumpView implements vscode.Disposable {
         const locationLink = this.parseLocation(symbol.location) ?? '';
         let info = `Defined in ${symbol.section.name}`;
         if (symbol.nmSymbol?.size) {
-            const sectionRef = `<a href="${ObjdumpView.vscodeCommandToUri(ObjdumpView.getObjdumpViewShowCommandFromSection(symbol.section.nmRun.file, symbol.section.name))}" title="To ${escapeHTML(symbol.section.name)}">${escapeHTML(symbol.section.name)}</a>`;
+            const sectionRef = `<a href="${ObjdumpView.vscodeCommandToUri(ObjdumpView.getObjdumpViewShowCommandFromSection(symbol.section))}" title="To ${escapeHTML(symbol.section.name)}">${escapeHTML(symbol.section.name)}</a>`;
             info = `Spans ${symbol.nmSymbol.size} bytes in ${sectionRef}`;
         }
 
@@ -53,9 +63,9 @@ export class ObjdumpView implements vscode.Disposable {
         if (references.length > 0) {
             referencesHtml = '<h2>Referenced from</h2>\n<p>';
             referencesHtml += references.map(r =>
-                `<a href="${ObjdumpView.vscodeCommandToUri(ObjdumpView.getObjdumpViewShowCommandFromAddress(r.from.symbol.section.nmRun.file, r.from.address))}" title="To ${r.from.addressStr}">${r.from.addressStr}</a>`
+                `<a href="${ObjdumpView.vscodeCommandToUri(ObjdumpView.getObjdumpViewShowCommandFromAddress(r.from))}" title="To ${r.from.addressStr}">${r.from.addressStr}</a>`
                 + ' in '
-                + `<a href="${ObjdumpView.vscodeCommandToUri(ObjdumpView.getObjdumpViewShowCommandFromAddress(r.from.symbol.section.nmRun.file, r.from.symbol.address))}" title="To ${r.from.symbol.addressStr} ${escapeHTML(r.from.symbol.name)}">${r.from.symbol.addressStr} (${escapeHTML(ObjdumpView.truncateLargeString(r.from.symbol.name, 32))})</a>`
+                + `<a href="${ObjdumpView.vscodeCommandToUri(ObjdumpView.getObjdumpViewShowCommandFromAddress(r.from))}" title="To ${r.from.symbol.addressStr} ${escapeHTML(r.from.symbol.name)}">${r.from.symbol.addressStr} (${escapeHTML(ObjdumpView.truncateLargeString(r.from.symbol.name, 32))})</a>`
             ).join('<br />\n');
             referencesHtml += '</p>';
         }
@@ -69,33 +79,9 @@ export class ObjdumpView implements vscode.Disposable {
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>${this.view!.title}</title>
     <link rel="stylesheet" href="${this.includeStyleCss()}">
+    <script type="text/javascript" src="${this.includeGeneralJs()}"></script>
     <script>
         const startAddress = ${address};
-
-        function onLoad()
-        {
-            if (startAddress)
-            {
-                select(startAddress);
-            }
-        }
-
-        function select(address)
-        {
-            for(const selectedElement of document.getElementsByClassName('selected'))
-            {
-                selectedElement.classList.remove('selected');
-            }
-
-            const targetElement = document.getElementById(address.toString(16));
-            if (targetElement)
-            {
-                targetElement.classList.add('selected');
-                targetElement.scrollIntoView({behavior: 'smooth', block: 'nearest'});
-            }
-        }
-
-        document.addEventListener("DOMContentLoaded", onLoad);
     </script>
 </head>
 <body>
@@ -121,7 +107,7 @@ export class ObjdumpView implements vscode.Disposable {
                 refA = `<a href="#${ref.addressStr}" onclick="select(0x${ref.addressStr}); return false;" title="To ${ref.addressStr}">${ref.addressStr}</a>`;
             }
             else {
-                refA = `<a href="${ObjdumpView.vscodeCommandToUri(ObjdumpView.getObjdumpViewShowCommandFromAddress(ref.symbol.section.nmRun.file, ref.address))}" title="To ${ref.addressStr} ${escapeHTML(ref.symbol.name)}">${ref.addressStr} (${escapeHTML(ObjdumpView.truncateLargeString(ref.symbol.name, 32))})</a>`;
+                refA = `<a href="${ObjdumpView.vscodeCommandToUri(ObjdumpView.getObjdumpViewShowCommandFromAddress(ref))}" title="To ${ref.addressStr} ${escapeHTML(ref.symbol.name)}">${ref.addressStr} (${escapeHTML(ObjdumpView.truncateLargeString(ref.symbol.name, 32))})</a>`;
             }
 
             const assemblyArgumentsLower = assemblyArguments.toLowerCase();
@@ -199,6 +185,8 @@ export class ObjdumpView implements vscode.Disposable {
 
         const symbolTable = section.symbols.as_array().map(s => this.parseSymbol(s)).join('\n');
 
+        const binaryName = this.nmStore.getUniquePart(section.nmRun);
+
         this.view!.webview.html = `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -206,12 +194,13 @@ export class ObjdumpView implements vscode.Disposable {
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>${this.view!.title}</title>
     <link rel="stylesheet" href="${this.includeStyleCss()}">
+    <script type="text/javascript" src="${this.includeGeneralJs()}"></script>
     <script>
     </script>
 </head>
 <body>
     <h1>${escapeHTML(section.name)}</h1>
-    <p>From ${section.address.toString(16)} to ${(section.address + section.size).toString(16)}, ${section.size} large.</p>
+    <p>From ${section.address.toString(16)} to ${(section.address + section.size).toString(16)}, ${section.size} large, in <a href="${ObjdumpView.vscodeCommandToUri(ObjdumpView.getObjdumpViewShowCommandFromNmRun(section.nmRun))}" title="To ${escapeHTML(binaryName)}">${escapeHTML(binaryName)}</a></p>
 
     <h2>Symbols</h2>
     <table class="symbols">
@@ -229,23 +218,70 @@ export class ObjdumpView implements vscode.Disposable {
     }
 
     private parseSymbol(symbol: ObjdumpSymbol): string {
-        const symbolRef = `<a href="${ObjdumpView.vscodeCommandToUri(ObjdumpView.getObjdumpViewShowCommandFromAddress(symbol.section.nmRun.file, symbol.address))}" title="To ${symbol.addressStr} ${escapeHTML(symbol.name)}">${escapeHTML(ObjdumpView.truncateLargeString(symbol.name, 64))}</a>`;
+        const symbolRef = `<a href="${ObjdumpView.vscodeCommandToUri(ObjdumpView.getObjdumpViewShowCommandFromAddress(symbol))}" title="To ${symbol.addressStr} ${escapeHTML(symbol.name)}">${escapeHTML(ObjdumpView.truncateLargeString(symbol.name, 64))}</a>`;
 
         return `<tr id="${symbol.addressStr}">
             <td class="address">${symbol.addressStr}</td>
             <td class="address">${(symbol.address + symbol.size).toString(16)}</td>
-            <td class="address">${symbol.size}</td>
+            <td class="address size">${symbol.size}</td>
             <td>${symbolRef}</td>
             <td class="sourcefile">${this.parseLocation(symbol.location) ?? ''}</td>
         </tr>`;
     }
 
     setBinary(binary: NmRun) {
-        // TODO
+        const binaryName = this.nmStore.getUniquePart(binary);
+
+        this.view!.title = `Objdump ${escapeHTML(binaryName)}`;
+
+        const sectionTable = binary.sections.as_array().map(s => this.parseSection(s)).join('\n');
+
+        this.view!.webview.html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>${this.view!.title}</title>
+    <link rel="stylesheet" href="${this.includeStyleCss()}">
+    <script type="text/javascript" src="${this.includeGeneralJs()}"></script>
+    <script>
+    </script>
+</head>
+<body>
+    <h1>${escapeHTML(binaryName)}</h1>
+    <p>Full path: ${escapeHTML(binary.file.fsPath)}</p>
+
+    <h2>Sections</h2>
+    <table class="symbols">
+        <tr>
+            <th>Start address</th>
+            <th>Up to address</th>
+            <th>Size</th>
+            <th>Section name</th>
+        </tr>
+        ${sectionTable}
+    </table>
+</body>
+</html>`;
+    }
+
+    private parseSection(section: ObjdumpSection): string {
+        const sectionRef = `<a href="${ObjdumpView.vscodeCommandToUri(ObjdumpView.getObjdumpViewShowCommandFromSection(section))}" title="To ${escapeHTML(section.name)}">${escapeHTML(section.name)}</a>`;
+
+        return `<tr id="${section.address.toString(16)}">
+            <td class="address">${section.address.toString(16)}</td>
+            <td class="address">${(section.address + section.size).toString(16)}</td>
+            <td class="address size">${section.size}</td>
+            <td>${sectionRef}</td>
+        </tr>`;
     }
 
     private includeStyleCss(): string {
         return this.view!.webview.asWebviewUri(vscode.Uri.joinPath(this.extensionUri, 'resources', 'style.css')).toString();
+    }
+
+    private includeGeneralJs(): string {
+        return this.view!.webview.asWebviewUri(vscode.Uri.joinPath(this.extensionUri, 'resources', 'general.js')).toString();
     }
 
     dispose() {

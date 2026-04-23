@@ -2,7 +2,7 @@
 	"name": "nm-tool",
 	"displayName": "Nm tool",
 	"description": "Integrate GNU binutils nm and objdump in IDE",
-	"version": "1.2.0",
+	"version": "2.0.0",
 	"publisher": "wibren-wiersma",
 	"repository": "https://github.com/XibrenX/nm-tool",
 	"keywords": [
@@ -38,12 +38,12 @@
 			},
 			{
 				"command": "nm-tool.copyPath",
-				"title": "Copy Full Path",
+				"title": "Copy full path",
 				"icon": "$(copy)"
 			},
 			{
-				"command": "nm-tool.viewObjDump",
-				"title": "Nm tool: View Objdump",
+				"command": "nm-tool.showObjdump",
+				"title": "Nm tool: Show Objdump",
 				"icon": "$(debug)"
 			}
 		],
@@ -99,6 +99,11 @@
 						"type": "string",
 						"default": "**/*.elf",
 						"description": "The file(s) the nm tool uses to feed to the `nm` command"
+					},
+					"nmTool.showRefs": {
+						"type": "boolean",
+						"default": true,
+						"description": "Show refs above functions in editor"
 					}
 				}
 			}

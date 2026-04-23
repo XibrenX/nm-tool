@@ -27,7 +27,7 @@ export class NmLineCodeLens extends vscode.CodeLens {
         };
 
         if (nmLine.objdumpSymbol) {
-            const objDumpViewCommand = ObjdumpView.getObjdumpViewShowCommandFromAddress(nmLine.run.file, nmLine.objdumpSymbol.address);
+            const objDumpViewCommand = ObjdumpView.getObjdumpViewShowCommandFromAddress(nmLine.objdumpSymbol);
             command.command = objDumpViewCommand.command;
             command.arguments = objDumpViewCommand.arguments;
         }
@@ -69,6 +69,7 @@ export class CodeLensProvider implements vscode.CodeLensProvider<CodeLensItem> {
 
     provideCodeLenses(document: vscode.TextDocument, token: vscode.CancellationToken): vscode.ProviderResult<CodeLensItem[]> {
         const codeLenses: CodeLensItem[] = [];
+        const showRefs = vscode.workspace.getConfiguration('nmTool').get<boolean>('showRefs', true);
 
         for (const run of this.nmStore.runs) {
             for (const line of run.symbols) {
@@ -79,7 +80,7 @@ export class CodeLensProvider implements vscode.CodeLensProvider<CodeLensItem> {
                     codeLenses.push(new NmLineCodeLens(line, this.nmStore));
                 }
 
-                if (line.objdumpSymbol !== undefined) {
+                if (line.objdumpSymbol !== undefined && showRefs) {
                     const refs = run.refsFromOtherLabels(line.objdumpSymbol);
                     if (refs.length > 0) {
                         codeLenses.push(new RefsCodeLens(document.uri, line, this.nmStore, refs.map(r => r.from)));
